@@ -9,7 +9,8 @@ import (
 )
 
 type Server struct {
-	address string
+	address  string
+	database Database
 }
 type APIError struct {
 	Error string
@@ -18,7 +19,7 @@ type APIError struct {
 // For the JSON response
 func responseJSON(w http.ResponseWriter, status int, data interface{}) error {
 	w.WriteHeader(status)
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Add("Content-Type", "application/json")
 
 	response := json.NewEncoder(w).Encode(data)
 	return response
@@ -41,9 +42,12 @@ func httpHandleConverter(f signature) http.HandlerFunc {
 //
 // listen: string representing the address to listen on.
 // Returns a pointer to the newly created Server instance.
-func NewAPIServer(listen string) *Server {
+func NewAPIServer(listen string, dbContext Database) *Server {
 	// Create a new Server instance and set its address to the provided listen address.
-	return &Server{address: listen}
+	return &Server{
+		address:  listen,
+		database: dbContext,
+	}
 }
 
 func (s *Server) Serve() error {
