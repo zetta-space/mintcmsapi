@@ -17,9 +17,9 @@ type APIError struct {
 }
 
 // For the JSON response
-func responseJSON(w http.ResponseWriter, status int, data interface{}) error {
-	w.WriteHeader(status)
+func ResponseJSON(w http.ResponseWriter, status int, data interface{}) error {
 	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(status)
 
 	response := json.NewEncoder(w).Encode(data)
 	return response
@@ -31,7 +31,7 @@ type signature func(http.ResponseWriter, *http.Request) error
 func httpHandleConverter(f signature) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := f(w, r); err != nil {
-			responseJSON(w, http.StatusBadRequest, APIError{
+			ResponseJSON(w, http.StatusBadRequest, APIError{
 				err.Error(),
 			})
 		}
@@ -54,8 +54,7 @@ func (s *Server) Serve() error {
 	router := mux.NewRouter()
 	router.HandleFunc("/api/v1/products", httpHandleConverter(s.rootHandler))
 
-	// Log the msg of server running
-	log.Println("Server running on", s.address)
+	log.Println("Serve in", s.address)
 
 	return http.ListenAndServe(s.address, router)
 }
@@ -79,7 +78,23 @@ func (s *Server) rootHandler(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) createProductHandler(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	createProduct := new(NewProductRequest)
+	if err := json.NewDecoder(r.Body).Decode(createProduct); err != nil {
+		return err
+	}
+
+	// Save the product to the database
+	product := NewProduct(createProduct.Name,
+		createProduct.Description,
+		createProduct.Price,
+		createProduct.Quantity,
+		createProduct.DeliveryDays,
+	)
+	if err := s.database.CreateProduct(product); err != nil {
+		return err
+	}
+
+	return ResponseJSON(w, http.StatusCreated, product)
 }
 
 func (s *Server) updateProductHandler(w http.ResponseWriter, r *http.Request) error {
@@ -92,10 +107,14 @@ func (s *Server) deleteProductHandler(w http.ResponseWriter, r *http.Request) er
 
 func (s *Server) getProductHandler(w http.ResponseWriter, r *http.Request) error {
 	vars := mux.Vars(r)
-	return responseJSON(w, http.StatusOK, vars)
+	return ResponseJSON(w, http.StatusOK, vars)
 }
 
 func (s *Server) listProductsHandler(w http.ResponseWriter, r *http.Request) error {
-	vars := mux.Vars(r)
-	return responseJSON(w, http.StatusOK, vars)
+	products, err := s.database.ListProducts()
+
+	if err != nil {
+		return err
+	}
+	return ResponseJSON(w, http.StatusOK, products)
 }
